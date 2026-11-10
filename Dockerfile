@@ -27,6 +27,7 @@ RUN case "$TARGETARCH" in \
     && printf 'Mihomo %s\nSource: https://github.com/MetaCubeX/mihomo/archive/refs/tags/%s.tar.gz\n' "$MIHOMO_VERSION" "$MIHOMO_VERSION" > /out/SOURCE.txt
 
 FROM alpine:3.22
+LABEL org.opencontainers.image.source="https://github.com/mrlihx/clash-config-manager"
 RUN apk add --no-cache ca-certificates tzdata \
     && cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
     && addgroup -S -g 10001 app \

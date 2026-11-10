@@ -1,6 +1,6 @@
 # 生产部署
 
-推荐 Docker Compose：一次构建包含管理程序、前端和 Mihomo。Caddy 对外提供 HTTPS，SQLite、登录会话和规则方案放在持久卷中。应用所有运行设置仍来自根目录 YAML，没有环境变量配置。
+推荐 Docker Compose：直接拉取包含管理程序、前端和 Mihomo 的预构建镜像。Caddy 对外提供 HTTPS，SQLite、登录会话和规则方案放在持久卷中。应用所有运行设置仍来自根目录 YAML，没有环境变量配置。
 
 ## 一键部署
 
@@ -10,15 +10,15 @@
 curl -fsSL https://raw.githubusercontent.com/mrlihx/clash-config-manager/main/deploy/install.sh | sudo bash -s -- --remote
 ```
 
-脚本安装到 `/opt/clash-config-manager`，自动拉取 GitHub 的 main 分支；缺少 Git 时通过系统包管理器安装，缺少 Docker 时调用官方安装脚本，然后构建并启动服务。默认访问 `http://服务器IP:8787`，密码为 `admin123`，可在后台右上角修改；修改后需要重新登录。服务器需开放 8787 端口。重复执行保留已有配置和数据。
+脚本安装到 `/opt/clash-config-manager`，只从 GitHub 下载 Compose 和示例配置文件；缺少 Docker 时调用官方安装脚本。随后从 GHCR 拉取预构建镜像并启动，不下载源码、不编译，也无需安装 Git、Go 或 Node.js。默认访问 `http://服务器IP:8787`，密码为 `admin123`，可在后台右上角修改；修改后需要重新登录。服务器需开放 8787 端口。重复执行保留已有配置和数据。
 
-日后更新使用同一命令，使用 Git 快进更新，不覆盖本地代码改动；如存在冲突，部署会停止并显示 Git 错误。配置文件和数据库保留。此方式使用 `compose.quick.yaml`，无需配置域名；需要 HTTPS 时使用下面的 Caddy 部署方式，两种方式选择一种启动即可。
+日后更新执行同一命令，拉取最新镜像并重建容器。配置文件、数据库和原有 `clash-config-manager_manager-data` 数据卷保留，旧版源码构建部署也可沿用。此方式使用 `compose.quick.yaml`，无需配置域名；需要 HTTPS 时使用下面的 Caddy 部署方式，两种方式选择一种启动即可。
 
 后台“导出备份”生成当前 SQLite 的一致性副本，不需要停止服务。备份包含节点凭据和登录会话，请妥善保管；启动配置文件需单独保留。
 
 ## Docker Compose
 
-适用于 Linux amd64 / arm64 服务器，需要已安装 Docker Engine 和 Compose 插件。将项目源码上传服务器，不要上传本机的 `config.yaml` 或包含凭据的数据库到公开仓库。
+适用于 Linux amd64 / arm64 服务器，需要已安装 Docker Engine 和 Compose 插件。准备 `compose.yaml`、`config.example.yaml` 和 `deploy/Caddyfile` 即可，无需项目源码。不要把本机配置或数据库上传到公开仓库。
 
 1. 准备配置并编辑管理员密码：
 
@@ -36,23 +36,24 @@ curl -fsSL https://raw.githubusercontent.com/mrlihx/clash-config-manager/main/de
 3. 启动：
 
    ```sh
-   docker compose up -d --build
+   docker compose pull
+   docker compose up -d --wait
    docker compose ps
    docker compose logs --tail=100 manager
    ```
 
 4. 使用 `https://你的域名` 登录；生成的订阅链接、二维码会自动使用该域名。
 
-Mihomo 在构建阶段从官方 Release 下载，默认固定 v1.19.33。无需在宿主机单独安装或运行 Mihomo，也不需要 privileged、host 网络或 TUN 权限。管理程序只调用 `mihomo -t` 校验配置，不承担用户代理流量。
+镜像由 GitHub Actions 构建，已包含 Mihomo。无需在服务器单独安装内核，也不需要 privileged、host 网络或 TUN 权限。管理程序只调用 `mihomo -t` 校验配置，不承担用户代理流量。
 
-升级内核可在构建时指定版本（构建参数不是运行环境配置）：
+更新镜像：
 
 ```sh
-docker compose build --build-arg MIHOMO_VERSION=v1.19.33 manager
-docker compose up -d
+docker compose pull
+docker compose up -d --wait
 ```
 
-更新项目代码后重新运行 `docker compose up -d --build`。普通重建、重启和 `docker compose down` 保留数据；不要使用 `down -v`，它会删除持久卷。
+普通重建、重启和 `docker compose down` 保留数据；不要使用 `down -v`，它会删除持久卷。如需固定版本，可将 Compose 中的 `latest` 改为已发布的版本标签或 SHA 标签。
 
 ### 备份与迁移
 
@@ -127,15 +128,16 @@ sudo systemctl enable --now clash-config-manager
 
 Mihomo 的工作目录为配置文件所在目录下的 `data/`，因此运行缓存为 `data/cache.db`，默认规则缓存为 `data/rules/`。启动时会迁移旧根目录缓存（目标不存在时）；本地文件规则的相对路径同样以 `data/` 为基准。Docker 中这些缓存与 SQLite 一起由 manager-data 卷持久化。
 
-## 构建时下载 Go 依赖超时
+## 维护者发布镜像
 
-镜像构建默认使用 `https://goproxy.cn,direct`，仅影响构建阶段，不改变应用运行配置，也不关闭依赖校验。出现 `proxy.golang.org ... i/o timeout` 时，更新源码后重新部署即可。
+`.github/workflows/publish.yml` 在 main 更新、`v*` 标签或手动触发时执行：代码检查、实际容器启动及改密/备份验证、多架构构建、推送 GHCR。使用仓库自动提供的 `GITHUB_TOKEN`，无需另外配置镜像密码。
 
-需要使用其他 Go 模块代理时，可以传入构建参数：
+首次发布的 GitHub Package 默认可能是 Private。维护者需到 `https://github.com/users/mrlihx/packages/container/clash-config-manager/settings` 将 Visibility 改成 Public；否则其他人的 `docker pull` 会提示 denied。
+
+镜像包含 amd64、arm64，Docker 按服务器架构自动选择。服务器部署过程不执行 Dockerfile。维护者需要自行构建镜像时可运行：
 
 ```sh
-docker compose -f compose.quick.yaml build --build-arg GOPROXY=https://proxy.golang.org,direct manager
-docker compose -f compose.quick.yaml up -d --wait
+docker build -t clash-config-manager:local --build-arg GOPROXY=https://proxy.golang.org,direct .
 ```
 
-该设置只处理 Go 依赖下载；Docker Hub、Alpine 软件源和 GitHub 的下载仍依赖服务器网络。
+一键部署仍需要网络能访问 raw.githubusercontent.com、ghcr.io；首次安装 Docker 还需要其官方安装源。无法访问镜像仓库时请先处理服务器网络。

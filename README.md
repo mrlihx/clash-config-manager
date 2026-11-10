@@ -83,7 +83,7 @@ go run ./cmd/app
 curl -fsSL https://raw.githubusercontent.com/mrlihx/clash-config-manager/main/deploy/install.sh | sudo bash -s -- --remote
 ```
 
-默认安装到 `/opt/clash-config-manager`，自动从 GitHub 拉取源码，Linux 上安装缺少的 Git 和 Docker，构建后通过 `http://服务器IP:8787` 访问。默认密码 `admin123`，后台右上角可修改密码、导出数据库备份。重复部署保留已有密码和数据。首次构建需要联网下载依赖，服务器需开放 8787 端口。
+默认安装到 `/opt/clash-config-manager`，只下载部署文件和预构建 Docker 镜像，Linux 上安装缺少的 Docker，通过 `http://服务器IP:8787` 访问。默认密码 `admin123`，后台右上角可修改密码、导出数据库备份。重复部署保留已有密码和数据。服务器不需要 Git、Go、Node.js 或编译环境，需能访问 GitHub、GHCR 并开放 8787 端口。
 
 ## 构建和部署
 
@@ -94,7 +94,13 @@ go build -trimpath -ldflags='-s -w' -o bin/clash-config-manager ./cmd/app
 
 HTML、CSS、JavaScript 和 YAML 编辑器已全部内嵌。部署时带上可执行程序、`config.yaml` 和 Mihomo 即可；迁移现有数据还需要数据库。服务器不需要 Node.js 或 `web/` 目录。
 
-公网部署、HTTPS、Docker Compose、systemd 和备份步骤见 [部署说明](deploy/README.md)。Docker 构建会下载 Mihomo；直接运行二进制时需自行安装。
+公网部署、HTTPS、Docker Compose、systemd 和备份步骤见 [部署说明](deploy/README.md)。Docker 镜像已包含 Mihomo；直接运行二进制时需自行安装。
+
+## 镜像发布
+
+GitHub Actions 在 main 更新或推送 `v*` 标签时检查代码、构建并验证运行镜像，然后发布 `linux/amd64` 与 `linux/arm64` 到 `ghcr.io/mrlihx/clash-config-manager`。main 对应 `latest`，同时保留提交 SHA 标签；版本标签保留原名称。
+
+首次发布后，需要在 GitHub 的 Package settings 中将镜像可见性设为 Public，其他用户才能免登录拉取。镜像发布流程见 [publish.yml](.github/workflows/publish.yml)。
 
 ## 项目结构
 

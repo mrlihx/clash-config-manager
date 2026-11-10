@@ -1,6 +1,6 @@
 services:
   manager:
-    build: .
+    image: ghcr.io/mrlihx/clash-config-manager:latest
     restart: unless-stopped
     ports:
       - "8787:8787"

@@ -1,0 +1,95 @@
+name: Publish Docker image
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go test ./...
+      - run: go vet ./...
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: Build test image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: clash-manager-smoke:test
+          build-args: GOPROXY=https://proxy.golang.org,direct
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Check container, password persistence and backup
+        shell: bash
+        run: |
+          cp config.example.yaml "$RUNNER_TEMP/config.yaml"
+          sudo chown 10001:10001 "$RUNNER_TEMP/config.yaml"
+          docker run -d --name manager-smoke -p 127.0.0.1:18789:8787 \
+            -v "$RUNNER_TEMP/config.yaml:/app/config.yaml" clash-manager-smoke:test
+          ready=false
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:18789/api/session > /dev/null; then ready=true; break; fi
+            sleep 1
+          done
+          if [ "$ready" != true ]; then docker logs manager-smoke; exit 1; fi
+          curl -fsS http://127.0.0.1:18789/ | grep -q '/js/app.js'
+          curl -fsS http://127.0.0.1:18789/js/app.js > /dev/null
+          curl -fsS -c "$RUNNER_TEMP/cookies" -H 'Content-Type: application/json' \
+            -d '{"password":"admin123"}' http://127.0.0.1:18789/api/login
+          curl -fsS -b "$RUNNER_TEMP/cookies" http://127.0.0.1:18789/api/backup -o "$RUNNER_TEMP/backup.db"
+          python3 -c 'import os,sqlite3; db=sqlite3.connect(os.environ["RUNNER_TEMP"]+"/backup.db"); assert db.execute("PRAGMA integrity_check").fetchone()[0]=="ok"'
+          curl -fsS -b "$RUNNER_TEMP/cookies" -H 'Content-Type: application/json' \
+            -d '{"currentPassword":"admin123","newPassword":"container-test"}' http://127.0.0.1:18789/api/password
+          docker restart manager-smoke
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:18789/api/session > /dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS -H 'Content-Type: application/json' -d '{"password":"container-test"}' http://127.0.0.1:18789/api/login
+      - name: Container logs
+        if: failure()
+        run: docker logs manager-smoke || true
+      - name: Clean up test container
+        if: always()
+        run: docker rm -f manager-smoke || true
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=tag
+            type=sha,format=long
+      - name: Publish amd64 and arm64
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: GOPROXY=https://proxy.golang.org,direct
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
