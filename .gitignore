@@ -1,0 +1,11 @@
+/config.yaml
+/config.production.yaml
+/data/
+/rules/
+/backup/
+/bin/
+/node_modules/
+/.idea/
+.DS_Store
+*.db
+*.db-*

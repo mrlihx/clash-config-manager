@@ -1,0 +1,3 @@
+clash.example.com {
+    reverse_proxy manager:8787
+}

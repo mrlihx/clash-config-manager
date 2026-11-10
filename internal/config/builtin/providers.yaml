@@ -1,0 +1,60 @@
+System_China:
+  type: http
+  behavior: domain
+  format: yaml
+  url: https://raw.githubusercontent.com/Loyalsoldier/clash-rules/release/direct.txt
+  interval: 86400
+System_Overseas:
+  type: http
+  behavior: domain
+  format: yaml
+  url: https://raw.githubusercontent.com/Loyalsoldier/clash-rules/release/proxy.txt
+  interval: 86400
+System_Reject:
+  type: http
+  behavior: domain
+  format: yaml
+  url: https://raw.githubusercontent.com/Loyalsoldier/clash-rules/release/reject.txt
+  interval: 86400
+System_Private:
+  type: http
+  behavior: domain
+  format: yaml
+  url: https://raw.githubusercontent.com/Loyalsoldier/clash-rules/release/private.txt
+  interval: 86400
+System_GFW:
+  type: http
+  behavior: domain
+  format: yaml
+  url: https://raw.githubusercontent.com/Loyalsoldier/clash-rules/release/gfw.txt
+  interval: 86400
+System_ForeignTLD:
+  type: http
+  behavior: domain
+  format: yaml
+  url: https://raw.githubusercontent.com/Loyalsoldier/clash-rules/release/tld-not-cn.txt
+  interval: 86400
+System_TelegramCIDR:
+  type: http
+  behavior: ipcidr
+  format: yaml
+  url: https://raw.githubusercontent.com/Loyalsoldier/clash-rules/release/telegramcidr.txt
+  interval: 86400
+System_LanCIDR:
+  type: http
+  behavior: ipcidr
+  format: yaml
+  url: https://raw.githubusercontent.com/Loyalsoldier/clash-rules/release/lancidr.txt
+  interval: 86400
+System_ChinaCIDR:
+  type: http
+  behavior: ipcidr
+  format: yaml
+  url: https://raw.githubusercontent.com/Loyalsoldier/clash-rules/release/cncidr.txt
+  interval: 86400
+System_Applications:
+  type: http
+  behavior: classical
+  format: yaml
+  url: https://raw.githubusercontent.com/Loyalsoldier/clash-rules/release/applications.txt
+  interval: 86400
