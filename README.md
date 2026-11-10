@@ -83,7 +83,7 @@ go run ./cmd/app
 curl -fsSL https://raw.githubusercontent.com/mrlihx/clash-config-manager/main/deploy/install.sh | sudo bash -s -- --remote
 ```
 
-默认安装到 `/opt/clash-config-manager`，只下载部署文件和预构建 Docker 镜像，Linux 上安装缺少的 Docker，通过 `http://服务器IP:8787` 访问。默认密码 `admin123`，后台右上角可修改密码、导出数据库备份。重复部署保留已有密码和数据。服务器不需要 Git、Go、Node.js 或编译环境，需能访问 GitHub、GHCR 并开放 8787 端口。
+默认安装到 `/opt/clash-config-manager`，只下载部署文件和预构建 Docker 镜像，Linux 上安装缺少的 Docker，通过 `http://服务器IP:8787` 访问。默认密码 `admin123`，后台右上角可修改密码，左侧“备份管理”可生成、上传和恢复数据库备份。重复部署保留已有密码和数据。服务器不需要 Git、Go、Node.js 或编译环境，需能访问 GitHub、GHCR 并开放 8787 端口。
 
 ## 构建和部署
 
@@ -96,11 +96,19 @@ HTML、CSS、JavaScript 和 YAML 编辑器已全部内嵌。部署时带上可�
 
 公网部署、HTTPS、Docker Compose、systemd 和备份步骤见 [部署说明](deploy/README.md)。Docker 镜像已包含 Mihomo；直接运行二进制时需自行安装。
 
+## 备份与在线更新
+
+「备份管理」显示所有已生成和上传的备份，可下载、删除或导入恢复。上传支持本系统导出的 `.db` 文件，最大 128 MB；上传不会立即改变数据。恢复会覆盖全部节点、规则方案和订阅，自动保存一份恢复前备份，并要求重新登录；`config.yaml` 中的管理员密码不变。文件保存在 `data/backups/`，Docker 中随数据卷持久保存。
+
+网站底部显示程序版本，点击「检查更新」可从 GitHub Releases 更新可执行程序。更新前自动备份数据库，校验 SHA-256 和 CPU 架构，替换后自动重启；配置、订阅地址和数据保持不变。更新文件保存在 `data/bin/`，容器重启后仍然使用更新后的程序。
+
+旧 Docker 镜像需要先通过部署脚本升级一次，获得支持在线更新的启动器。之后更新管理程序无需重新部署 Docker；Mihomo、系统依赖和基础镜像仍通过 Docker 镜像更新。开发启动方式不支持在线更新。
+
 ## 镜像发布
 
 GitHub Actions 在 main 更新或推送 `v*` 标签时检查代码、构建并验证运行镜像，然后发布 `linux/amd64` 与 `linux/arm64` 到 `ghcr.io/mrlihx/clash-config-manager`。main 对应 `latest`，同时保留提交 SHA 标签；版本标签保留原名称。
 
-首次发布后，需要在 GitHub 的 Package settings 中将镜像可见性设为 Public，其他用户才能免登录拉取。镜像发布流程见 [publish.yml](.github/workflows/publish.yml)。
+首次发布后，需要在 GitHub 的 Package settings 中将镜像可见性设为 Public，其他用户才能免登录拉取。Linux 可执行程序及 `SHA256SUMS` 同时发布到 [Releases](https://github.com/mrlihx/clash-config-manager/releases)。发布流程见 [publish.yml](.github/workflows/publish.yml)。
 
 ## 项目结构
 

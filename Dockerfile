@@ -8,7 +8,8 @@ COPY internal/ ./internal/
 COPY web/ ./web/
 ARG TARGETOS
 ARG TARGETARCH
-RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags="-s -w" -o /out/clash-config-manager ./cmd/app
+ARG APP_VERSION=dev
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags="-s -w -X main.version=$APP_VERSION" -o /out/clash-config-manager ./cmd/app
 
 FROM --platform=$BUILDPLATFORM alpine:3.22 AS core
 RUN apk add --no-cache ca-certificates curl
@@ -39,7 +40,8 @@ COPY --from=core /out/mihomo /usr/local/bin/mihomo
 COPY --from=core /out/LICENSE /out/SOURCE.txt /usr/share/licenses/mihomo/
 COPY LICENSE /usr/share/licenses/clash-config-manager/LICENSE
 COPY THIRD_PARTY_NOTICES.md /usr/share/licenses/clash-config-manager/THIRD_PARTY_NOTICES.md
+COPY deploy/entrypoint.sh /usr/local/bin/manager-entrypoint
 WORKDIR /app
 USER app
 EXPOSE 8787
-ENTRYPOINT ["/usr/local/bin/clash-config-manager", "-config", "/app/config.yaml"]
+ENTRYPOINT ["/bin/sh", "/usr/local/bin/manager-entrypoint", "-config", "/app/config.yaml"]

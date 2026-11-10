@@ -12,6 +12,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -20,8 +21,17 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
+var version = "dev"
+
 func main() {
+	if run() {
+		os.Exit(75)
+	}
+}
+
+func run() bool {
 	configPath := flag.String("config", "config.yaml", "项目配置文件")
+	managed := flag.Bool("managed", false, "由启动器管理程序更新和重启")
 	flag.Parse()
 	file, err := os.Open(*configPath)
 	if err != nil {
@@ -92,6 +102,11 @@ func main() {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	var restarting atomic.Bool
+	app.Version = version
+	if *managed {
+		app.Restart = func() { restarting.Store(true); stop() }
+	}
 	updaterDone := make(chan struct{})
 	go func() { defer close(updaterDone); app.RunSourceUpdater(ctx) }()
 	service := &http.Server{Addr: settings.Listen, Handler: app.Routes(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 20 * time.Second, WriteTimeout: 75 * time.Second, IdleTimeout: 60 * time.Second}
@@ -113,4 +128,5 @@ func main() {
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatalf("HTTP 服务停止：%v", err)
 	}
+	return restarting.Load()
 }

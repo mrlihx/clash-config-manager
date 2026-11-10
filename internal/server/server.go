@@ -25,11 +25,14 @@ type Server struct {
 	password   string
 	passwordMu sync.RWMutex
 	ConfigPath string
+	Version    string
+	Restart    func()
+	updateMu   sync.Mutex
 	core       string
 }
 
 func New(db *store.Store, password, core, root string) *Server {
-	return &Server{Store: db, password: password, core: core, root: root}
+	return &Server{Store: db, password: password, core: core, root: root, Version: "dev"}
 }
 
 func randomToken(n int) string {
@@ -43,8 +46,17 @@ func randomToken(n int) string {
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/login", s.login)
+	mux.HandleFunc("GET /api/version", s.auth(s.appVersion))
+	mux.HandleFunc("GET /api/update", s.auth(s.checkUpdate))
+	mux.HandleFunc("POST /api/update", s.auth(s.applyUpdate))
 	mux.HandleFunc("POST /api/password", s.auth(s.changePassword))
 	mux.HandleFunc("GET /api/backup", s.auth(s.backup))
+	mux.HandleFunc("GET /api/backups", s.auth(s.backups))
+	mux.HandleFunc("POST /api/backups", s.auth(s.createBackup))
+	mux.HandleFunc("POST /api/backups/upload", s.auth(s.uploadBackup))
+	mux.HandleFunc("GET /api/backups/{id}/download", s.auth(s.downloadBackup))
+	mux.HandleFunc("POST /api/backups/{id}/restore", s.auth(s.restoreBackup))
+	mux.HandleFunc("DELETE /api/backups/{id}", s.auth(s.deleteBackup))
 	mux.HandleFunc("GET /api/session", s.session)
 	mux.HandleFunc("POST /api/logout", s.auth(s.logout))
 	mux.HandleFunc("GET /api/subscription-qr", s.auth(func(w http.ResponseWriter, r *http.Request) {

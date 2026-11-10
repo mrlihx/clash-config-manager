@@ -14,7 +14,7 @@ curl -fsSL https://raw.githubusercontent.com/mrlihx/clash-config-manager/main/de
 
 日后更新执行同一命令，拉取最新镜像并重建容器。配置文件、数据库和原有 `clash-config-manager_manager-data` 数据卷保留，旧版源码构建部署也可沿用。此方式使用 `compose.quick.yaml`，无需配置域名；需要 HTTPS 时使用下面的 Caddy 部署方式，两种方式选择一种启动即可。
 
-后台“导出备份”生成当前 SQLite 的一致性副本，不需要停止服务。备份包含节点凭据和登录会话，请妥善保管；启动配置文件需单独保留。
+后台“备份管理”支持生成、上传、下载和恢复 SQLite 备份，不需要停止服务；恢复前自动备份，恢复后重新登录，管理员密码保持不变。备份包含节点凭据和登录会话，请妥善保管；启动配置文件需单独保留。
 
 ## Docker Compose
 
@@ -128,9 +128,17 @@ sudo systemctl enable --now clash-config-manager
 
 Mihomo 的工作目录为配置文件所在目录下的 `data/`，因此运行缓存为 `data/cache.db`，默认规则缓存为 `data/rules/`。启动时会迁移旧根目录缓存（目标不存在时）；本地文件规则的相对路径同样以 `data/` 为基准。Docker 中这些缓存与 SQLite 一起由 manager-data 卷持久化。
 
+## 网站底部在线更新
+
+新版镜像通过启动器运行管理程序，支持从网站底部检查更新并安装 GitHub Releases 中的可执行文件。旧镜像第一次启用时先运行部署脚本更新镜像，之后管理程序升级无需重新创建容器。
+
+启动器在 `data/bin/clash-config-manager` 存在时运行该更新程序，因此 Docker 重启不会回到旧版。更新前会生成数据库备份，下载通过 SHA-256 和 ELF 架构检查后才替换，并等待当前请求、后台任务和数据库正常关闭后重启。更新失败不会替换现有程序。
+
+在线更新不会更新 Mihomo 或基础镜像。需要回到镜像自带程序时，停止服务并删除数据卷中的 `data/bin/clash-config-manager`，然后启动容器；业务数据和备份不受影响。
+
 ## 维护者发布镜像
 
-`.github/workflows/publish.yml` 在 main 更新、`v*` 标签或手动触发时执行：代码检查、实际容器启动及改密/备份验证、多架构构建、推送 GHCR。使用仓库自动提供的 `GITHUB_TOKEN`，无需另外配置镜像密码。
+`.github/workflows/publish.yml` 在 main 更新、`v*` 标签或手动触发时执行：代码检查、实际容器启动及改密/备份验证、发布 Linux 可执行程序及校验文件、验证在线更新和容器重启后的版本、多架构构建、推送 GHCR。使用仓库自动提供的 `GITHUB_TOKEN`，无需另外配置镜像密码。
 
 首次发布的 GitHub Package 默认可能是 Private。维护者需到 `https://github.com/users/mrlihx/packages/container/clash-config-manager/settings` 将 Visibility 改成 Public；否则其他人的 `docker pull` 会提示 denied。
 
