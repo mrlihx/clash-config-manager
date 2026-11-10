@@ -1,7 +1,8 @@
 FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS build
 WORKDIR /src
 COPY go.mod go.sum ./
-RUN go mod download
+ARG GOPROXY=https://goproxy.cn,direct
+RUN go env -w GOPROXY="$GOPROXY" && go mod download
 COPY cmd/ ./cmd/
 COPY internal/ ./internal/
 COPY web/ ./web/

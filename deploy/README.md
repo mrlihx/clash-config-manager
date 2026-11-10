@@ -126,3 +126,16 @@ sudo systemctl enable --now clash-config-manager
 订阅在浏览器中直接按纯文本阅读，不再触发附件下载；客户端仍根据 User-Agent 获取 Clash YAML 或通用节点订阅。
 
 Mihomo 的工作目录为配置文件所在目录下的 `data/`，因此运行缓存为 `data/cache.db`，默认规则缓存为 `data/rules/`。启动时会迁移旧根目录缓存（目标不存在时）；本地文件规则的相对路径同样以 `data/` 为基准。Docker 中这些缓存与 SQLite 一起由 manager-data 卷持久化。
+
+## 构建时下载 Go 依赖超时
+
+镜像构建默认使用 `https://goproxy.cn,direct`，仅影响构建阶段，不改变应用运行配置，也不关闭依赖校验。出现 `proxy.golang.org ... i/o timeout` 时，更新源码后重新部署即可。
+
+需要使用其他 Go 模块代理时，可以传入构建参数：
+
+```sh
+docker compose -f compose.quick.yaml build --build-arg GOPROXY=https://proxy.golang.org,direct manager
+docker compose -f compose.quick.yaml up -d --wait
+```
+
+该设置只处理 Go 依赖下载；Docker Hub、Alpine 软件源和 GitHub 的下载仍依赖服务器网络。
