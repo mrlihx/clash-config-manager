@@ -17,7 +17,7 @@ func TestSubscriptionOnlyServesPublishedSnapshot(t *testing.T) {
 	}
 	defer db.Close()
 	s := New(db, "test", "", t.TempDir())
-	p := &store.Profile{ID: "id", Name: "Home", Slug: "home", Enabled: true, Draft: "draft", Published: "published"}
+	p := &store.Profile{ID: "id", Name: "Home", Slug: "home", Enabled: true, Draft: "draft", Published: "marker: published\n"}
 	if err := s.Store.Save(p); err != nil {
 		t.Fatal(err)
 	}
@@ -34,7 +34,7 @@ func TestSubscriptionOnlyServesPublishedSnapshot(t *testing.T) {
 	} {
 		w := httptest.NewRecorder()
 		s.Routes().ServeHTTP(w, httptest.NewRequest(http.MethodGet, tc.url, nil))
-		if tc.status == 200 && (w.Header().Get("Content-Disposition") != "inline" || !strings.HasPrefix(w.Header().Get("Content-Type"), "text/plain")) {
+		if tc.status == 200 && (!strings.HasPrefix(w.Header().Get("Content-Disposition"), "inline;") || !strings.HasPrefix(w.Header().Get("Content-Type"), "text/plain")) {
 			t.Fatal("subscription must render as plain text")
 		}
 		if w.Code != tc.status || !strings.Contains(w.Body.String(), tc.body) {

@@ -19,16 +19,18 @@ const maxBody = 8 << 20
 const sessionCookie = "clash_session"
 
 type Server struct {
-	Store      *store.Store
-	root       string
-	coreMu     sync.Mutex
-	password   string
-	passwordMu sync.RWMutex
-	ConfigPath string
-	Version    string
-	Restart    func()
-	updateMu   sync.Mutex
-	core       string
+	resourceLocks  sync.Map
+	resourceErrors sync.Map
+	Store          *store.Store
+	root           string
+	coreMu         sync.Mutex
+	password       string
+	passwordMu     sync.RWMutex
+	ConfigPath     string
+	Version        string
+	Restart        func()
+	updateMu       sync.Mutex
+	core           string
 }
 
 func New(db *store.Store, password, core, root string) *Server {

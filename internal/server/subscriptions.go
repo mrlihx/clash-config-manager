@@ -28,7 +28,9 @@ func (s *Server) subscriptionOptions(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) createSubscription(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Selections []struct {
+		Name              string
+		ClientUpdateHours int
+		Selections        []struct {
 			ID    string
 			Nodes []string
 		}
@@ -38,6 +40,13 @@ func (s *Server) createSubscription(w http.ResponseWriter, r *http.Request) {
 		FollowRouting *bool
 	}
 	if !jsonBody(w, r, &req) {
+		return
+	}
+	if req.ClientUpdateHours == 0 {
+		req.ClientUpdateHours = 24
+	}
+	if req.ClientUpdateHours < 1 || req.ClientUpdateHours > 720 {
+		fail(w, 400, "客户端更新间隔需在 1 到 720 小时之间")
 		return
 	}
 	template, err := s.routingPlan(req.RoutingPlan)
@@ -95,6 +104,10 @@ func (s *Server) createSubscription(w http.ResponseWriter, r *http.Request) {
 	}
 	now := time.Now()
 	p := &store.Profile{Kind: "subscription", ID: randomToken(16), Name: strings.Join(names, " + ") + " · " + now.Format("01-02 15:04:05"), Slug: randomSlug(), Enabled: true, Revision: 1, Original: source, Draft: source, Published: source, PublishedAt: now}
+	p.ClientUpdateHours = req.ClientUpdateHours
+	if name := strings.TrimSpace(req.Name); name != "" {
+		p.Name = name
+	}
 	syncState.RoutingBaseline = source
 	syncJSON, _ := json.Marshal(syncState)
 	p.Sync = string(syncJSON)

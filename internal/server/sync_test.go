@@ -48,6 +48,7 @@ func TestSourceUpdatesPublishedNodesAndClientFormats(t *testing.T) {
 	if !strings.Contains(updated.Published, "new.test") || !strings.Contains(updated.Published, "b.test") || updated.Slug != "stable" {
 		t.Fatal("published subscription did not sync")
 	}
+	seedResources(t, s, updated.Published)
 	for _, agent := range []string{"v2rayNG/1", "Clash.Meta", "unknown"} {
 		r := httptest.NewRequest("GET", "/s/stable", nil)
 		r.Header.Set("User-Agent", agent)

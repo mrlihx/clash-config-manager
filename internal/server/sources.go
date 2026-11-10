@@ -222,6 +222,22 @@ func (s *Server) refreshDueSources(ctx context.Context, now time.Time) {
 }
 
 func (s *Server) RunSourceUpdater(ctx context.Context) {
+	resourceDone := make(chan struct{})
+	go func() {
+		defer close(resourceDone)
+		s.refreshResources(ctx)
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				s.refreshResources(ctx)
+			}
+		}
+	}()
+	defer func() { <-resourceDone }()
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 	_ = s.syncRoutingSubscriptions(ctx, "", "")

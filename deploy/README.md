@@ -138,7 +138,7 @@ Mihomo 的工作目录为配置文件所在目录下的 `data/`，因此运行�
 
 ## 维护者发布镜像
 
-`.github/workflows/publish.yml` 在 main 更新、`v*` 标签或手动触发时执行：代码检查、实际容器启动及改密/备份验证、发布 Linux 可执行程序及校验文件、验证在线更新和容器重启后的版本、多架构构建、推送 GHCR。使用仓库自动提供的 `GITHUB_TOKEN`，无需另外配置镜像密码。
+`.github/workflows/release.yml` 负责检查代码、验证真实 MRS 转换并发布 Linux 可执行程序和校验文件。`.github/workflows/publish.yml` 负责镜像的容器测试、多架构构建和 GHCR 发布。提交信息带 `[release-only]` 时跳过 Docker 流程，只发布程序。使用仓库自动提供的 `GITHUB_TOKEN`，无需另外配置镜像密码。
 
 首次发布的 GitHub Package 默认可能是 Private。维护者需到 `https://github.com/users/mrlihx/packages/container/clash-config-manager/settings` 将 Visibility 改成 Public；否则其他人的 `docker pull` 会提示 denied。
 
@@ -149,3 +149,10 @@ docker build -t clash-config-manager:local --build-arg GOPROXY=https://proxy.gol
 ```
 
 一键部署仍需要网络能访问 raw.githubusercontent.com、ghcr.io；首次安装 Docker 还需要其官方安装源。无法访问镜像仓库时请先处理服务器网络。
+
+
+## 订阅资源和客户端信息
+
+平台将远程 YAML、文本、MRS 规则解析并缓存到 `data/resources/`，按各规则的 interval 检查更新（每分钟调度一次）；同一个资源被多处使用时采用最短间隔。失败时沿用最近有效内容，首次尚无可用内容时返回明确错误，不返回外部资源引用或缺失规则的配置。
+
+客户端获取完整内嵌规则；后台编辑仍保留来源地址。外部节点集合会展开为普通节点。订阅的名称及 1—720 小时客户端更新间隔可在订阅编辑中修改，默认 24 小时。Clash Verge Rev、Hiddify 等支持的客户端会读取响应头；v2rayNG 等未实现相应协议的客户端仍需手动设置名称和自动更新。

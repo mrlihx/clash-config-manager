@@ -3,8 +3,10 @@ package server
 import (
 	"clash-config-manager/internal/config"
 	"context"
+	"encoding/base64"
 	"errors"
 	"io"
+	"mime"
 	"net/http"
 	"os"
 	"os/exec"
@@ -24,9 +26,17 @@ func (s *Server) subscription(w http.ResponseWriter, r *http.Request) {
 	s.Store.Lock()
 	var syncErr error
 	targetID := ""
+	name := slug
+	updateHours := 24
 	list, listErr := s.Store.List()
 	if listErr == nil {
 		for _, item := range list {
+			if item.Slug == slug {
+				name = item.Name
+				if p, e := s.Store.Get(item.ID); e == nil {
+					updateHours = p.ClientUpdateHours
+				}
+			}
 			if item.Slug == slug && item.Kind == "subscription" {
 				targetID = item.ID
 				syncErr = s.syncSubscriptions("sub:" + item.ID)
@@ -50,6 +60,16 @@ func (s *Server) subscription(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Vary", "User-Agent")
 	format := config.ClientFormat(r.UserAgent())
+	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(3 * time.Minute))
+	bundled, stale, e := s.bundleSubscription(r.Context(), source, format == "v2ray")
+	if e != nil {
+		fail(w, 503, "订阅资源尚未准备好："+e.Error())
+		return
+	}
+	source = bundled
+	if stale {
+		w.Header().Set("X-Resource-Sync", "stale; serving-last-cache")
+	}
 	if format == "v2ray" {
 		var skipped int
 		source, skipped, err = config.ExportLinks(source)
@@ -60,8 +80,10 @@ func (s *Server) subscription(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Subscription-Skipped", strconv.Itoa(skipped))
 	}
 
+	w.Header().Set("Profile-Update-Interval", strconv.Itoa(updateHours))
+	w.Header().Set("Profile-Title", "base64:"+base64.StdEncoding.EncodeToString([]byte(name)))
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	w.Header().Set("Content-Disposition", "inline")
+	w.Header().Set("Content-Disposition", mime.FormatMediaType("inline", map[string]string{"filename": name}))
 	_, _ = io.WriteString(w, source)
 }
 

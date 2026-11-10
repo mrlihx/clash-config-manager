@@ -52,7 +52,7 @@ func (s *Store) Restore(path string) error {
 		return err
 	}
 	defer tx.Rollback()
-	columns := "id,name,slug,enabled,revision,original,draft,published,published_at,history,kind,source_url,update_minutes,update_at,next_update,last_update,update_error,subscription_sync"
+	columns := "id,name,slug,enabled,revision,original,draft,published,published_at,history,kind,source_url,update_minutes,update_at,next_update,last_update,update_error,subscription_sync,client_update_hours"
 	if _, err = tx.Exec("DELETE FROM profiles"); err != nil {
 		return err
 	}

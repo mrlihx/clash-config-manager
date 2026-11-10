@@ -175,8 +175,8 @@ export function providerEditor(section, data, key, preview) {
     `<div id="providerRemote" class="space-y-4">${field('订阅 URL','url',item.url,'url')}${field('自动更新间隔（秒）','interval',item.interval || 86400,'number','min="1"')}</div>
     <div id="providerFilePath">${field('文件路径','path',item.path)}</div>
     <div id="providerInline" class="space-y-2"><p class="${help}">每行一条匹配条件，也可粘贴 payload YAML。不要在每行填写目标策略。</p><div data-yaml-editor class="yaml-editor"></div></div>`+
-    grid(fixed?`<p class="${help}">广告规则固定拦截（REJECT）</p>`:select('目标策略','target',targets,rule?.value.split(',')[2] || '🚀 手动选择'))+
-    field('优先级（规则位置，留空自动安排）','position',rule?rule.index+1:'','number','min="1"')+
+    grid((fixed?`<p class="${help}">广告规则固定拦截（REJECT）</p>`:select('目标策略','target',targets,rule?.value.split(',')[2] || '🚀 手动选择'))+
+    field('优先级（规则位置，留空自动安排）','position',rule?rule.index+1:'','number','min="1"'))+
     `<p class="${help}">保存时自动生成分流引用，并更新跟随此规则方案的订阅。</p>`,
     form=>{
       const type=trim(form,'type');

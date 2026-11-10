@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
   packages: write
 
 concurrency:
@@ -16,6 +16,7 @@ concurrency:
 
 jobs:
   publish:
+    if: ${{ !contains(github.event.head_commit.message, '[release-only]') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -84,59 +85,6 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
             type=ref,event=tag
             type=sha,format=long
-      - name: Build release executables
-        run: |
-          mkdir -p dist
-          for arch in amd64 arm64; do
-            CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build -trimpath \
-              -ldflags="-s -w -X main.version=$GITHUB_SHA" \
-              -o "dist/clash-config-manager_linux_$arch" ./cmd/app
-          done
-          cd dist
-          sha256sum clash-config-manager_linux_* > SHA256SUMS
-      - name: Publish GitHub Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          tag="build-${GITHUB_SHA:0:12}"
-          if gh release view "$tag" > /dev/null 2>&1; then
-            gh release upload "$tag" dist/* --clobber
-            gh release edit "$tag" --latest
-          else
-            gh release create "$tag" dist/* \
-              --target "$GITHUB_SHA" --title "Build ${GITHUB_SHA:0:12}" \
-              --notes 'Linux amd64 / arm64 可执行程序及 SHA-256 校验文件。支持网站底部在线更新。' --latest
-          fi
-      - name: Verify online executable update
-        shell: bash
-        run: |
-          docker run -d --name update-smoke -p 127.0.0.1:18790:8787 \
-            -v "$RUNNER_TEMP/config.yaml:/app/config.yaml" clash-manager-smoke:test
-          for attempt in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:18790/api/session > /dev/null; then break; fi
-            sleep 1
-          done
-          curl -fsS -c "$RUNNER_TEMP/update-cookies" -H 'Content-Type: application/json' \
-            -d '{"password":"container-test"}' http://127.0.0.1:18790/api/login
-          curl -fsS --max-time 700 -b "$RUNNER_TEMP/update-cookies" -H 'Content-Type: application/json' \
-            -d "{\"tag\":\"build-${GITHUB_SHA:0:12}\"}" http://127.0.0.1:18790/api/update
-          for attempt in $(seq 1 60); do
-            if curl -fsS -b "$RUNNER_TEMP/update-cookies" http://127.0.0.1:18790/api/version | grep -q "$GITHUB_SHA"; then break; fi
-            sleep 1
-          done
-          curl -fsS -b "$RUNNER_TEMP/update-cookies" http://127.0.0.1:18790/api/version | grep "$GITHUB_SHA"
-          docker restart update-smoke
-          for attempt in $(seq 1 30); do
-            if curl -fsS -b "$RUNNER_TEMP/update-cookies" http://127.0.0.1:18790/api/version | grep -q "$GITHUB_SHA"; then break; fi
-            sleep 1
-          done
-          curl -fsS -b "$RUNNER_TEMP/update-cookies" http://127.0.0.1:18790/api/version | grep "$GITHUB_SHA"
-      - name: Updated container logs
-        if: failure()
-        run: docker logs update-smoke || true
-      - name: Clean up update test
-        if: always()
-        run: docker rm -f update-smoke || true
       - name: Publish amd64 and arm64
         uses: docker/build-push-action@v6
         with:
