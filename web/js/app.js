@@ -343,10 +343,11 @@ async function createSubscription() {
 async function editSubscription(id) {
   await selectProfile(id);
   let options=await api('/api/subscription-options?plan='+encodeURIComponent(profile.routingPlan || 'system-routing-template'));
-  let draft=profile.yaml;
+  const editor=await request({action:'subscription-editor'});
+  let draft=editor.yaml;
   let mode='routing';
   let dirty=false;
-  const choices=subscriptionChoices(options,profile.data ?? {});
+  const choices=subscriptionChoices(options,editor.data ?? {});
   const applyChoices=data=>{
     const rules=data.rules ?? [];
     for(const item of options.ruleSets){
@@ -378,7 +379,7 @@ async function editSubscription(id) {
       else await syncRouting();
       await update({action:'save-subscription',yaml:draft,routingPlan:values.get('subscription-plan'),followRouting:values.has('follow-routing')},'订阅配置已更新');
     },{wide:true,confirm:'保存配置',description:'勾选规则与分组，或直接编辑带高亮的 YAML。'});
-  applyChoices(profile.data ?? {});
+  applyChoices(editor.data ?? {});
   let selectedPlan=profile.routingPlan || 'system-routing-template';
   form.querySelector('[name=subscription-plan]').addEventListener('change',async event=>{
     const save=form.querySelector('button[type=submit]');save.disabled=true;event.target.disabled=true;

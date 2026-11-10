@@ -222,6 +222,19 @@ func (s *Server) change(w http.ResponseWriter, r *http.Request) {
 	}
 	var next string
 	switch req.Action {
+	case "subscription-editor":
+		next, _, e := s.bundleSubscription(r.Context(), p.Draft, true)
+		if e != nil {
+			fail(w, 422, e.Error())
+			return
+		}
+		data, e := config.Validate(next)
+		if e != nil {
+			fail(w, 422, e.Error())
+			return
+		}
+		reply(w, 200, map[string]any{"yaml": next, "data": data})
+		return
 	case "inspect-subscription":
 		data, e := config.Validate(req.YAML)
 		if e != nil {
@@ -258,7 +271,11 @@ func (s *Server) change(w http.ResponseWriter, r *http.Request) {
 		}
 		base := p.Draft
 		if req.Action == "preview-subscription-routing" {
-			base = req.YAML
+			base, err = config.RestoreServiceSources(p.Draft, req.YAML, func(resource config.Resource) ([]byte, error) { return s.loadResource(r.Context(), resource) })
+			if err != nil {
+				fail(w, 422, err.Error())
+				return
+			}
 		}
 		state, e := routingState(p)
 		if e != nil {
@@ -275,6 +292,11 @@ func (s *Server) change(w http.ResponseWriter, r *http.Request) {
 			next, err = config.ConfigureSubscriptionRouting(base, template.Draft, req.Services, req.RuleSets)
 		}
 		if req.Action == "preview-subscription-routing" {
+			if err != nil {
+				fail(w, 422, err.Error())
+				return
+			}
+			next, _, err = s.bundleSubscription(r.Context(), next, true)
 			if err != nil {
 				fail(w, 422, err.Error())
 				return
@@ -310,7 +332,15 @@ func (s *Server) change(w http.ResponseWriter, r *http.Request) {
 			next, err = config.Merge(p.Draft, source, req.Selection)
 		}
 	case "save", "preview", "save-subscription":
-		next, err = config.NormalizeLayout(req.YAML)
+		source := req.YAML
+		if p.Kind == "subscription" && req.Action == "save-subscription" {
+			source, err = config.RestoreServiceSources(p.Draft, source, func(resource config.Resource) ([]byte, error) { return s.loadResource(r.Context(), resource) })
+			if err != nil {
+				fail(w, 422, err.Error())
+				return
+			}
+		}
+		next, err = config.NormalizeLayout(source)
 		if err == nil && p.Kind == "subscription" && req.RoutingPlan != "" {
 			state, e := routingState(p)
 			if e != nil {

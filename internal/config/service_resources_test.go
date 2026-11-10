@@ -35,3 +35,34 @@ rules:
 		t.Fatalf("incorrect selective inlining: %s", out)
 	}
 }
+
+func TestServiceEditorPreservesSourcesAndManualOverrides(t *testing.T) {
+	original := `rule-providers:
+  System_Claude:
+    type: http
+    behavior: domain
+    url: https://example.com/claude.yaml
+rules:
+  - MATCH,DIRECT
+`
+	load := func(Resource) ([]byte, error) { return []byte("payload:\n  - '+.claude.ai'\n"), nil }
+	rendered, err := InlineSubscriptionResources(original, load)
+	if err != nil {
+		t.Fatal(err)
+	}
+	restored, err := RestoreServiceSources(original, rendered, load)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(restored, "https://example.com/claude.yaml") {
+		t.Fatal("unchanged service lost automatic update source")
+	}
+	edited := strings.ReplaceAll(rendered, "+.claude.ai", "+.anthropic.com")
+	saved, err := RestoreServiceSources(original, edited, load)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(saved, "https://example.com/claude.yaml") || !strings.Contains(saved, "+.anthropic.com") {
+		t.Fatal("manual service override was lost")
+	}
+}
