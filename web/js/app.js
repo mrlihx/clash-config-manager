@@ -223,23 +223,35 @@ function subscriptionQR(url) {
   return `<div class="flex justify-center mb-4"><img src="/api/subscription-qr?url=${esc(encodeURIComponent(url))}" width="256" height="256" alt="订阅地址二维码" class="rounded-lg" style="background:white;max-width:100%;height:auto"></div>`;
 }
 
+function subscriptionLink(url) {
+  return `<div class="flex items-end gap-2"><div class="flex-1 min-w-0">${field('订阅地址','url',url,'text','readonly id="subURL"')}</div>${button('复制链接','copy-link',{symbol:'link'})}</div>`;
+}
+
 async function subscriptionAddress(id) {
   await selectProfile(id);
   const url=new URL(profile.subscription,location.origin).href;
-  modal('订阅地址',subscriptionQR(url)+field('订阅地址','url',url,'text','readonly id="subURL"')+
-    `<div class="flex gap-2">${button('复制链接','copy-link',{symbol:'link'})}</div>`+
+  const form=modal('订阅地址设置',subscriptionQR(url)+subscriptionLink(url)+
+    `<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">${field('订阅名称','subscription-name',profile.name,'text','required')}${field('客户端更新间隔（小时）','client-update-hours',profile.clientUpdateHours||24,'number','min="1" max="720" required')}</div>`+
+    `<p class="${help}">支持的客户端会自动读取名称与更新间隔；部分 APP 仍需手动开启自动更新。</p>`+
     `<div class="flex items-end gap-2"><div class="flex-1 min-w-0">${field('自定义订阅后缀','slug',profile.slug,'text','pattern="[A-Za-z0-9][A-Za-z0-9_\\-]{0,63}" placeholder="留空随机生成"')}</div>${button('随机','random-slug')}</div>`+
+    checkbox('启用外部资源加速','resource-proxy-enabled','1',Boolean(profile.resourceProxyPrefix))+
+    `<div id="resourceProxySettings">${field('GitHub 加速地址前缀','resource-proxy-prefix',profile.resourceProxyPrefix||'https://gh-proxy.org/','url','placeholder="https://加速服务地址/"')}<p class="${help}">仅转换公开 GitHub 规则文件的下载地址，不改动节点或私人订阅。加速速度取决于服务和线路。</p></div>`+
     checkbox('启用订阅','enabled','1',profile.enabled)+
-    `<p class="${help}">更换后缀后，旧地址失效。</p>`,
-  async form=>{
-    await update({action:'subscription',slug:form.get('slug').trim(),enabled:form.has('enabled')});
+    `<p class="${help}">更换后缀后，旧地址失效。修改名称、更新间隔或加速设置不会更换订阅地址。</p>`,
+  async values=>{
+    await update({action:'subscription',name:values.get('subscription-name').trim(),clientUpdateHours:Number(values.get('client-update-hours')),resourceProxyPrefix:values.has('resource-proxy-enabled')?values.get('resource-proxy-prefix').trim():'',slug:values.get('slug').trim(),enabled:values.has('enabled')});
     const nextURL=new URL(profile.subscription,location.origin).href;
-    modal('订阅地址已保存',subscriptionQR(nextURL)+field('订阅地址','url',nextURL,'text','readonly id="subURL"')+button('复制链接','copy-link',{symbol:'link'}),null);
+    modal('订阅地址已保存',subscriptionQR(nextURL)+subscriptionLink(nextURL),null);
     return false;
-  },{confirm:'保存地址'});
+  },{confirm:'保存设置'});
+  const toggleAcceleration=()=>{
+    const enabled=form.querySelector('[name=resource-proxy-enabled]').checked;
+    form.querySelector('#resourceProxySettings').hidden=!enabled;
+    const input=form.querySelector('[name=resource-proxy-prefix]');input.disabled=!enabled;input.required=enabled;
+  };
+  form.querySelector('[name=resource-proxy-enabled]').addEventListener('change',toggleAcceleration);
+  toggleAcceleration();
 }
-
-
 
 function renderAll() {
   render();
@@ -301,27 +313,24 @@ function create() {
 function subscriptionChoices(options,data=null) {
   const rules=data?.rules ?? [];
   return `<fieldset class="space-y-3"><legend class="block text-xs font-semibold">加入的规则集</legend><div class="subscription-options">${options.ruleSets.map(item=>{
-    const selected=data===null || item.required || rules.some(rule=>rule.startsWith('RULE-SET,'+item.id+',')||rule.startsWith('RULE-SET,System_'+item.id+','));
+    const selected=(data===null?(options.defaultRuleSets??[]).includes(item.id):false) || item.required || rules.some(rule=>rule.startsWith('RULE-SET,'+item.id+',')||rule.startsWith('RULE-SET,System_'+item.id+','));
     return checkbox(item.name,'ruleSet',item.id,selected).replace('<input ',`<input ${item.required?'disabled ':''}`);
-  }).join('')}</div></fieldset><fieldset class="space-y-3"><legend class="block text-xs font-semibold">海外服务分流组</legend><div class="subscription-options">${options.services.map(item=>checkbox(item.name,'service',item.id,data===null || (data['proxy-groups'] ?? []).some(group=>group.name===item.name))).join('')}</div></fieldset>`;
+  }).join('')}</div></fieldset><fieldset class="space-y-3"><legend class="block text-xs font-semibold">海外服务分流组</legend><div class="subscription-options">${options.services.map(item=>checkbox(item.name,'service',item.id,data===null?(options.defaultServices??[]).includes(item.id):(data['proxy-groups'] ?? []).some(group=>group.name===item.name))).join('')}</div></fieldset>`;
 }
 
 async function createSubscription() {
   if (!selectedNodes.size) throw new Error('请先展开配置并勾选节点');
   let options=await api('/api/subscription-options?plan='+encodeURIComponent(routingPlanID));
   const dialog=modal('生成订阅地址',
-    `<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">${field('订阅名称（留空自动生成）','subscription-name')}${field('客户端更新间隔（小时）','client-update-hours',24,'number','min="1" max="720" required')}</div>`+
-    `<p class="${help}">支持的客户端会自动读取名称与更新间隔；部分 APP 仍需手动开启自动更新。</p>`+
     select('规则方案','subscription-plan',routingPlans.map(plan=>[plan.id,plan.name]),routingPlanID)+
     checkbox('跟随规则方案更新','follow-routing','1',true)+
     `<p class="${help}">已选 ${selectedNodes.size} 个节点。方案修改后自动更新此订阅，专属修改保留。</p><div id="createSubscriptionChoices" class="space-y-4">${subscriptionChoices(options)}</div>`,
     async form=>{
       const selection=new Map();
       for(const key of selectedNodes){const [id,name]=JSON.parse(key);if(!selection.has(id))selection.set(id,[]);selection.get(id).push(name);}
-      const generated=await api('/api/subscriptions',{name:form.get('subscription-name').trim(),clientUpdateHours:Number(form.get('client-update-hours')),selections:[...selection].map(([id,nodes])=>({id,nodes})),services:form.getAll('service'),ruleSets:form.getAll('ruleSet'),routingPlan:form.get('subscription-plan'),followRouting:form.has('follow-routing')});
+      const generated=await api('/api/subscriptions',{selections:[...selection].map(([id,nodes])=>({id,nodes})),services:form.getAll('service'),ruleSets:form.getAll('ruleSet'),routingPlan:form.get('subscription-plan'),followRouting:form.has('follow-routing')});
       await refresh(generated.id);
-      const url=new URL(generated.subscription,location.origin).href;
-      modal('订阅地址已生成',subscriptionQR(url)+field('订阅地址','url',url,'text','readonly id="subURL"')+`<div class="flex gap-2">${button('复制链接','copy-link',{symbol:'link'})}${button('订阅管理','go-subscriptions')}</div>`,null);
+      await subscriptionAddress(generated.id);
       return false;
     },{wide:true,confirm:'生成订阅地址'});
   dialog.querySelector('[name=subscription-plan]').addEventListener('change',async event=>{
@@ -355,8 +364,6 @@ async function editSubscription(id) {
     dirty=false;
   };
   const form=modal('编辑订阅配置',
-    `<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">${field('订阅名称','subscription-name',profile.name,'text','required')}${field('客户端更新间隔（小时）','client-update-hours',profile.clientUpdateHours||24,'number','min="1" max="720" required')}</div>`+
-    `<p class="${help}">支持的客户端会自动读取名称与更新间隔；部分 APP 仍需手动开启自动更新。</p>`+
     select('规则方案','subscription-plan',routingPlans.map(plan=>[plan.id,plan.name]),profile.routingPlan || 'system-routing-template')+
     checkbox('跟随规则方案更新','follow-routing','1',profile.followRouting!==false)+
     `<p class="${help}">手工修改的 YAML 字段作为订阅专属覆盖保留。${profile.routingOverrides?.length?'自定义区段：'+esc(profile.routingOverrides.join('、'))+'。':''}${profile.syncError?esc(profile.syncError):''}</p>`+
@@ -369,7 +376,7 @@ async function editSubscription(id) {
     async values=>{
       if(mode==='yaml')draft=values.get('yaml');
       else await syncRouting();
-      await update({action:'save-subscription',name:values.get('subscription-name').trim(),clientUpdateHours:Number(values.get('client-update-hours')),yaml:draft,routingPlan:values.get('subscription-plan'),followRouting:values.has('follow-routing')},'订阅配置已更新');
+      await update({action:'save-subscription',yaml:draft,routingPlan:values.get('subscription-plan'),followRouting:values.has('follow-routing')},'订阅配置已更新');
     },{wide:true,confirm:'保存配置',description:'勾选规则与分组，或直接编辑带高亮的 YAML。'});
   applyChoices(profile.data ?? {});
   let selectedPlan=profile.routingPlan || 'system-routing-template';

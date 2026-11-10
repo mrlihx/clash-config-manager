@@ -45,17 +45,17 @@ func seedResources(t *testing.T, s *Server, source string) {
 	}
 }
 
-func TestBundledSubscriptionCacheAndClientMetadata(t *testing.T) {
+func TestRuleCacheAndExternalSubscriptionMetadata(t *testing.T) {
 	calls := 0
-	fail := false
+	failed := false
 	rule := "+.first.test"
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls++
-		if fail {
+		if failed {
 			w.WriteHeader(502)
 			return
 		}
-		w.Write([]byte("payload:\n  - " + rule + "\n"))
+		w.Write([]byte("payload: ['" + rule + "']"))
 	}))
 	defer upstream.Close()
 	root := t.TempDir()
@@ -65,53 +65,49 @@ func TestBundledSubscriptionCacheAndClientMetadata(t *testing.T) {
 	}
 	defer db.Close()
 	s := New(db, "pass", "", root)
-	source := "proxies: []\nrule-providers:\n  Test:\n    type: http\n    behavior: domain\n    format: yaml\n    interval: 60\n    url: " + upstream.URL + "\nrules: [\"RULE-SET,Test,DIRECT\",\"MATCH,DIRECT\"]\n"
+	source := "proxies: []\nrule-providers: {Test: {type: http, behavior: domain, interval: 60, url: '" + upstream.URL + "'}}\nrules: ['RULE-SET,Test,DIRECT','MATCH,DIRECT']\n"
 	p := &store.Profile{ID: "test", Name: "测试订阅", Slug: "test", Enabled: true, Draft: source, Published: source, ClientUpdateHours: 6}
 	if err = db.Save(p); err != nil {
 		t.Fatal(err)
 	}
-	fetch := func() *httptest.ResponseRecorder {
-		req := httptest.NewRequest("GET", "/s/test", nil)
-		rec := httptest.NewRecorder()
-		s.Routes().ServeHTTP(rec, req)
-		return rec
+	response := httptest.NewRecorder()
+	s.Routes().ServeHTTP(response, httptest.NewRequest("GET", "/s/test", nil))
+	if response.Code != 200 || !strings.Contains(response.Body.String(), upstream.URL) || calls != 0 {
+		t.Fatal("subscription should retain external references without downloading", response.Code, calls)
 	}
-	first := fetch()
-	if first.Code != 200 || !strings.Contains(first.Body.String(), "+.first.test") || strings.Contains(first.Body.String(), upstream.URL) || !strings.Contains(first.Body.String(), "type: inline") {
-		t.Fatal(first.Code, first.Body.String())
-	}
-	if first.Header().Get("Profile-Update-Interval") != "6" || !strings.Contains(first.Header().Get("Content-Disposition"), "filename*=utf-8''") {
-		t.Fatal("client metadata missing", first.Header())
-	}
-	if next := fetch(); next.Code != 200 || calls != 1 {
-		t.Fatal("cache was not reused", calls)
+	if response.Header().Get("Profile-Update-Interval") != "6" || !strings.Contains(response.Header().Get("Content-Disposition"), "filename*=utf-8''") {
+		t.Fatal("client metadata missing")
 	}
 	resources, _ := config.ExternalResources(source)
-	path := s.resourcePath(resources[0])
+	resource := resources[0]
+	first, err := s.loadResource(context.Background(), resource)
+	if err != nil || !strings.Contains(string(first), "+.first.test") {
+		t.Fatal("cache download failed", err)
+	}
+	if _, err = s.loadResource(context.Background(), resource); err != nil || calls != 1 {
+		t.Fatal("cache was not reused", calls)
+	}
+	path := s.resourcePath(resource)
 	old := time.Now().Add(-2 * time.Minute)
 	os.Chtimes(path, old, old)
 	rule = "+.updated.test"
-	s.refreshResources(context.Background())
-	// 非订阅旧式配置由请求刷新；自动调度覆盖模板和正式订阅。
-	updated := fetch()
-	if !strings.Contains(updated.Body.String(), "+.updated.test") {
-		t.Fatal("expired cache did not refresh", updated.Body.String())
+	updated, err := s.loadResource(context.Background(), resource)
+	if err != nil || !strings.Contains(string(updated), "+.updated.test") {
+		t.Fatal("expired cache not refreshed", err)
 	}
 	os.Chtimes(path, old, old)
-	fail = true
-	cached := fetch()
-	if cached.Code != 200 || !strings.Contains(cached.Body.String(), "+.updated.test") || cached.Header().Get("X-Resource-Sync") == "" {
-		t.Fatal("last valid content not retained", cached.Code, cached.Body.String())
+	failed = true
+	cached, err := s.loadResource(context.Background(), resource)
+	if err != nil || !strings.Contains(string(cached), "+.updated.test") {
+		t.Fatal("last valid cache lost", err)
 	}
 	dbProfile, _ := db.Get(p.ID)
-	if !strings.Contains(dbProfile.Draft, upstream.URL) {
-		t.Fatal("editable source was overwritten")
+	if dbProfile.Draft != source {
+		t.Fatal("editable source was modified")
 	}
 }
 
-func TestMissingResourceReturnsErrorWithoutExternalReferences(t *testing.T) {
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(503) }))
-	defer upstream.Close()
+func TestExternalSubscriptionDoesNotRequirePlatformCache(t *testing.T) {
 	root := t.TempDir()
 	db, err := store.Open(filepath.Join(root, "live.db"))
 	if err != nil {
@@ -119,22 +115,18 @@ func TestMissingResourceReturnsErrorWithoutExternalReferences(t *testing.T) {
 	}
 	defer db.Close()
 	s := New(db, "pass", "", root)
-	source := "rule-providers: {Missing: {type: http, behavior: domain, url: '" + upstream.URL + "'}}\nrules: ['RULE-SET,Missing,DIRECT']\n"
-	if err = db.Save(&store.Profile{ID: "x", Name: "X", Slug: "x", Enabled: true, Draft: source, Published: source}); err != nil {
+	source := "rule-providers: {Missing: {type: http, behavior: domain, url: 'https://raw.githubusercontent.com/example/rules/main/rules.yaml'}}\nrules: ['RULE-SET,Missing,DIRECT']\n"
+	if err = db.Save(&store.Profile{ID: "x", Name: "X", Slug: "x", Enabled: true, Draft: source, Published: source, ResourceProxyPrefix: "https://accelerator.example/"}); err != nil {
 		t.Fatal(err)
 	}
-	req := httptest.NewRequest("GET", "/s/x", nil)
-	rec := httptest.NewRecorder()
-	s.Routes().ServeHTTP(rec, req)
-	if rec.Code != 503 {
-		t.Fatal("missing cache should not silently fall back to external URL", rec.Code)
+	response := httptest.NewRecorder()
+	s.Routes().ServeHTTP(response, httptest.NewRequest("GET", "/s/x", nil))
+	if response.Code != 200 || !strings.Contains(response.Body.String(), "https://accelerator.example/https://raw.githubusercontent.com/") || strings.Contains(response.Body.String(), "type: inline") {
+		t.Fatal("external acceleration not applied", response.Code, response.Body.String())
 	}
-	var body map[string]any
-	if err = json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(rec.Body.String(), upstream.URL) {
-		t.Fatal("source URL leaked in error")
+	p, _ := db.Get("x")
+	if p.Draft != source {
+		t.Fatal("original URLs changed in saved config")
 	}
 }
 

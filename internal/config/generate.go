@@ -292,7 +292,12 @@ func Generate(source, preset string, nodesOnly bool) (string, error) {
 		if ruleEnabled(settings, "TelegramCIDR") {
 			rules = append(rules, "RULE-SET,System_TelegramCIDR,"+telegram+",no-resolve")
 		}
-		rules = append(rules, "RULE-SET,System_China,DIRECT", "RULE-SET,System_ChinaCIDR,DIRECT,no-resolve")
+		if ruleEnabled(settings, "China") {
+			rules = append(rules, "RULE-SET,System_China,DIRECT")
+		}
+		if ruleEnabled(settings, "ChinaCIDR") {
+			rules = append(rules, "RULE-SET,System_ChinaCIDR,DIRECT,no-resolve")
+		}
 		for _, id := range []string{"Overseas", "GFW", "ForeignTLD"} {
 			if ruleEnabled(settings, id) {
 				rules = append(rules, "RULE-SET,System_"+id+","+MainGroup)
@@ -334,6 +339,13 @@ func Generate(source, preset string, nodesOnly bool) (string, error) {
 			used[parts[1]] = true
 		}
 	}
+	for _, id := range []string{"China", "ChinaCIDR"} {
+		key := "System_" + id
+		if !ruleEnabled(settings, id) && !used[key] {
+			set(providers, key, nil)
+		}
+	}
+	pruneChinaDNS(root)
 	for _, policyName := range []string{"nameserver-policy", "proxy-server-nameserver-policy"} {
 		for i, key := range children(field(field(root, "dns"), policyName)) {
 			if i%2 != 0 {
@@ -386,4 +398,27 @@ func SystemGroups() []string {
 		names = append(names, category.Name)
 	}
 	return names
+}
+
+// 取消国内规则后同步清理 DNS 引用，避免仍下载国内规则或引用不存在的集合。
+func pruneChinaDNS(root *yaml.Node) {
+	providers := field(root, "rule-providers")
+	for _, name := range []string{"nameserver-policy", "proxy-server-nameserver-policy"} {
+		policy := field(field(root, "dns"), name)
+		for i := len(children(policy)) - 2; i >= 0; i -= 2 {
+			key := policy.Content[i]
+			ids, ok := strings.CutPrefix(key.Value, "rule-set:")
+			if !ok {
+				continue
+			}
+			kept := slices.DeleteFunc(strings.Split(ids, ","), func(id string) bool {
+				return (id == "System_China" || id == "System_ChinaCIDR") && field(providers, id) == nil
+			})
+			if len(kept) == 0 {
+				policy.Content = append(policy.Content[:i], policy.Content[i+2:]...)
+			} else {
+				key.Value = "rule-set:" + strings.Join(kept, ",")
+			}
+		}
+	}
 }

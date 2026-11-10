@@ -131,7 +131,7 @@ func (s *Server) detail(w http.ResponseWriter, r *http.Request) {
 func (s *Server) profileReply(w http.ResponseWriter, p *store.Profile) {
 	data, err := config.Validate(p.Draft)
 	preset, builtinCount := config.ManagedInfo(p.Draft)
-	out := map[string]any{"clientUpdateHours": p.ClientUpdateHours, "kind": p.Kind, "id": p.ID, "name": p.Name, "slug": p.Slug, "enabled": p.Enabled, "revision": p.Revision, "yaml": p.Draft, "data": data,
+	out := map[string]any{"resourceProxyPrefix": p.ResourceProxyPrefix, "clientUpdateHours": p.ClientUpdateHours, "kind": p.Kind, "id": p.ID, "name": p.Name, "slug": p.Slug, "enabled": p.Enabled, "revision": p.Revision, "yaml": p.Draft, "data": data,
 		"published": p.Published != "", "publishedAt": p.PublishedAt, "dirty": p.Draft != p.Published,
 		"preset": preset, "builtinCount": builtinCount, "systemGroups": config.SystemGroups(), "sourceURL": p.SourceURL, "updateMinutes": p.UpdateMinutes, "updateAt": p.UpdateAt, "nextUpdate": p.NextUpdate, "lastUpdate": p.LastUpdate, "updateError": p.UpdateError, "subscription": "/s/" + p.Slug}
 	updated := map[string]int64{}
@@ -183,23 +183,24 @@ func (s *Server) profileReply(w http.ResponseWriter, p *store.Profile) {
 }
 
 type changeRequest struct {
-	ClientUpdateHours *int
-	Preview           bool
-	Action            string
-	Revision          int
-	YAML              string
-	Edit              config.Edit
-	Source            string
-	Selection         map[string][]string
-	Slug              string
-	Enabled           *bool
-	Name              string
-	Preset            string
-	RuleTarget        string
-	RoutingPlan       string
-	FollowRouting     *bool
-	Services          []string
-	RuleSets          []string
+	ClientUpdateHours   *int
+	ResourceProxyPrefix *string
+	Preview             bool
+	Action              string
+	Revision            int
+	YAML                string
+	Edit                config.Edit
+	Source              string
+	Selection           map[string][]string
+	Slug                string
+	Enabled             *bool
+	Name                string
+	Preset              string
+	RuleTarget          string
+	RoutingPlan         string
+	FollowRouting       *bool
+	Services            []string
+	RuleSets            []string
 }
 
 func (s *Server) change(w http.ResponseWriter, r *http.Request) {
@@ -377,13 +378,21 @@ func (s *Server) change(w http.ResponseWriter, r *http.Request) {
 		fail(w, 400, err.Error())
 		return
 	}
-	if p.Kind == "subscription" && (req.Action == "save-subscription" || req.Action == "subscription") {
+	if (p.Kind == "subscription" || p.Published != "") && (req.Action == "save-subscription" || req.Action == "subscription") {
 		if req.ClientUpdateHours != nil {
 			if *req.ClientUpdateHours < 1 || *req.ClientUpdateHours > 720 {
 				fail(w, 400, "客户端更新间隔需在 1 到 720 小时之间")
 				return
 			}
 			p.ClientUpdateHours = *req.ClientUpdateHours
+		}
+		if req.ResourceProxyPrefix != nil {
+			prefix, e := config.NormalizeResourceProxy(*req.ResourceProxyPrefix)
+			if e != nil {
+				fail(w, 400, e.Error())
+				return
+			}
+			p.ResourceProxyPrefix = prefix
 		}
 		if req.Name != "" {
 			p.Name = strings.TrimSpace(req.Name)

@@ -28,6 +28,7 @@ func (s *Server) subscription(w http.ResponseWriter, r *http.Request) {
 	targetID := ""
 	name := slug
 	updateHours := 24
+	resourceProxy := ""
 	list, listErr := s.Store.List()
 	if listErr == nil {
 		for _, item := range list {
@@ -35,6 +36,7 @@ func (s *Server) subscription(w http.ResponseWriter, r *http.Request) {
 				name = item.Name
 				if p, e := s.Store.Get(item.ID); e == nil {
 					updateHours = p.ClientUpdateHours
+					resourceProxy = p.ResourceProxyPrefix
 				}
 			}
 			if item.Slug == slug && item.Kind == "subscription" {
@@ -61,7 +63,7 @@ func (s *Server) subscription(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Vary", "User-Agent")
 	format := config.ClientFormat(r.UserAgent())
 	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(3 * time.Minute))
-	bundled, stale, e := s.bundleSubscription(r.Context(), source, format == "v2ray")
+	bundled, stale, e := s.bundleSubscription(r.Context(), source, true)
 	if e != nil {
 		fail(w, 503, "订阅资源尚未准备好："+e.Error())
 		return
@@ -69,6 +71,13 @@ func (s *Server) subscription(w http.ResponseWriter, r *http.Request) {
 	source = bundled
 	if stale {
 		w.Header().Set("X-Resource-Sync", "stale; serving-last-cache")
+	}
+	if format != "v2ray" {
+		source, err = config.ExternalRuleURLs(source, resourceProxy)
+		if err != nil {
+			fail(w, 422, err.Error())
+			return
+		}
 	}
 	if format == "v2ray" {
 		var skipped int

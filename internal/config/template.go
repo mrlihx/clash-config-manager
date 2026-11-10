@@ -107,5 +107,6 @@ func ApplyRoutingTemplate(source, template string, selected []string) (string, e
 	if meta := field(root, "x-manager"); meta != nil {
 		set(meta, "rules", rules)
 	}
+	pruneChinaDNS(root)
 	return encode(doc)
 }

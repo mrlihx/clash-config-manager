@@ -72,6 +72,9 @@ func TestGlobalRoutingEditsUpdateLinkedSubscriptions(t *testing.T) {
 	if data["port"] != 8890 || !slices.Contains(data["rules"].([]any), any("RULE-SET,GlobalBlock,REJECT")) || current.UpdateError != "" {
 		t.Fatal("global rule sync failed or overwrote custom settings", current.UpdateError)
 	}
+	if strings.Contains(current.Published, "RULE-SET,System_China,") || strings.Contains(current.Published, "RULE-SET,System_ChinaCIDR,") {
+		t.Fatal("global sync re-enabled unselected domestic rules")
+	}
 	state, e := routingState(current)
 	if e != nil || state.RoutingBaseline == "" {
 		t.Fatal("routing baseline missing", e)

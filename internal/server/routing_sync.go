@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"time"
 )
 
@@ -66,8 +67,12 @@ func (s *Server) syncRoutingSubscriptions(ctx context.Context, planID, subscript
 			services, sets, parseErr := config.RoutingSelections(p.Draft)
 			e = parseErr
 			if state.FollowAllRuleSets {
+				previous := sets
 				sets = nil
 				for _, option := range templateRuleOptions(template) {
+					if (option.ID == "China" || option.ID == "ChinaCIDR") && !slices.Contains(previous, option.ID) {
+						continue
+					}
 					sets = append(sets, option.ID)
 				}
 			}

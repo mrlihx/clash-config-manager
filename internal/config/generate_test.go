@@ -126,9 +126,10 @@ func TestSubscriptionSelectionAndDomesticRules(t *testing.T) {
 		t.Fatal("unselected rule provider was emitted")
 	}
 	for _, rule := range []string{"RULE-SET,System_China,DIRECT", "RULE-SET,System_ChinaCIDR,DIRECT,no-resolve"} {
-		if !strings.Contains(generated, rule) {
-			t.Fatal("missing domestic direct rules")
+		if strings.Contains(generated, rule) {
+			t.Fatal("unselected domestic direct rule was emitted")
 		}
+
 	}
 	if _, ok := providers["System_Gemini"]; ok {
 		t.Fatal("unselected service rules were emitted")
@@ -383,5 +384,43 @@ func TestAdvertisingGroupHasOnlyRejectAndCacheUsesDefaults(t *testing.T) {
 	groups := data["proxy-groups"].([]any)
 	if !reflect.DeepEqual(groups[len(groups)-1].(map[string]any)["proxies"], []any{"REJECT"}) {
 		t.Fatal("advertising group is not fixed")
+	}
+}
+
+func TestDomesticDirectRulesAreOptionalAndDNSReferencesStayValid(t *testing.T) {
+	template, err := Generate(example, "balanced", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name       string
+		sets       []string
+		domain, ip bool
+	}{
+		{"none", []string{}, false, false},
+		{"domain", []string{"China"}, true, false},
+		{"ip", []string{"ChinaCIDR"}, false, true},
+		{"both", []string{"China", "ChinaCIDR"}, true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			output, err := BuildRouting(template, template, []string{}, tc.sets)
+			if err != nil {
+				t.Fatal(err)
+			}
+			data, err := Validate(output)
+			if err != nil {
+				t.Fatal("DNS or routing references were broken", err)
+			}
+			providers := data["rule-providers"].(map[string]any)
+			_, domain := providers["System_China"]
+			_, ip := providers["System_ChinaCIDR"]
+			if domain != tc.domain || ip != tc.ip {
+				t.Fatal("provider selection ignored", domain, ip)
+			}
+			rules := data["rules"].([]any)
+			if slices.Contains(rules, any("RULE-SET,System_China,DIRECT")) != tc.domain || slices.Contains(rules, any("RULE-SET,System_ChinaCIDR,DIRECT,no-resolve")) != tc.ip {
+				t.Fatal("routing selection ignored")
+			}
+		})
 	}
 }

@@ -14,17 +14,26 @@ type RuleOption struct {
 }
 
 var RuleOptions = []RuleOption{
-	{"China", "国内域名直连", true}, {"ChinaCIDR", "国内 IP 直连", true},
+	{"China", "国内域名直连", false}, {"ChinaCIDR", "国内 IP 直连", false},
 	{"Ads", "广告拦截", false}, {"Reject", "广告与跟踪拦截", false},
 	{"Overseas", "海外域名", false}, {"GFW", "GFW 域名", false}, {"ForeignTLD", "海外顶级域名", false},
 	{"TelegramCIDR", "Telegram IP", false},
 }
+
+var DefaultRuleSets = []string{}
+var DefaultServices = []string{"Claude", "Gemini", "OpenAI", "GooglePlay", "YouTube", "Google", "Twitter", "Netflix", "TikTok"}
 
 func ruleEnabled(settings managedSettings, id string) bool {
 	return settings.RuleSets == nil || slices.Contains(*settings.RuleSets, id)
 }
 
 func SubscriptionOptions(source string, services, rules []string) (string, error) {
+	if services == nil {
+		services = []string{}
+	}
+	if rules == nil {
+		rules = []string{}
+	}
 	for _, id := range services {
 		if !slices.ContainsFunc(Categories, func(c RoutingCategory) bool { return c.ID == id && !c.Direct }) {
 			return "", errors.New("分流组无效")

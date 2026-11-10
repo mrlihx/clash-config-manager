@@ -23,7 +23,7 @@ func (s *Server) subscriptionOptions(w http.ResponseWriter, r *http.Request) {
 		fail(w, 500, "读取默认规则失败")
 		return
 	}
-	reply(w, 200, map[string]any{"services": overseas, "ruleSets": templateRuleOptions(template)})
+	reply(w, 200, map[string]any{"services": overseas, "ruleSets": templateRuleOptions(template), "defaultRuleSets": config.DefaultRuleSets, "defaultServices": config.DefaultServices})
 }
 
 func (s *Server) createSubscription(w http.ResponseWriter, r *http.Request) {
@@ -41,6 +41,12 @@ func (s *Server) createSubscription(w http.ResponseWriter, r *http.Request) {
 	}
 	if !jsonBody(w, r, &req) {
 		return
+	}
+	if req.RuleSets == nil {
+		req.RuleSets = slices.Clone(config.DefaultRuleSets)
+	}
+	if req.Services == nil {
+		req.Services = slices.Clone(config.DefaultServices)
 	}
 	if req.ClientUpdateHours == 0 {
 		req.ClientUpdateHours = 24
@@ -194,6 +200,9 @@ func (s *Server) deleteSubscription(w http.ResponseWriter, r *http.Request) {
 
 func allRuleOptions(options []config.RuleOption, selected []string) bool {
 	for _, option := range options {
+		if option.ID == "China" || option.ID == "ChinaCIDR" {
+			continue
+		}
 		if !option.Required && !slices.Contains(selected, option.ID) {
 			return false
 		}

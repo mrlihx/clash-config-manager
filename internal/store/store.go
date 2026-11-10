@@ -13,24 +13,25 @@ import (
 )
 
 type Profile struct {
-	ClientUpdateHours int
-	Sync              string
-	SourceURL         string
-	UpdateMinutes     int
-	UpdateAt          string
-	NextUpdate        time.Time
-	LastUpdate        time.Time
-	UpdateError       string
-	Kind              string
-	ID                string
-	Name              string
-	Slug              string
-	Enabled           bool
-	Revision          int
-	Original          string
-	Draft             string
-	Published         string
-	PublishedAt       time.Time
+	ClientUpdateHours   int
+	ResourceProxyPrefix string
+	Sync                string
+	SourceURL           string
+	UpdateMinutes       int
+	UpdateAt            string
+	NextUpdate          time.Time
+	LastUpdate          time.Time
+	UpdateError         string
+	Kind                string
+	ID                  string
+	Name                string
+	Slug                string
+	Enabled             bool
+	Revision            int
+	Original            string
+	Draft               string
+	Published           string
+	PublishedAt         time.Time
 }
 
 type Store struct {
@@ -96,6 +97,7 @@ func Open(path string) (*Store, error) {
 	migrations := []struct{ name, definition string }{
 		{"kind", "TEXT NOT NULL DEFAULT 'source'"},
 		{"client_update_hours", "INTEGER NOT NULL DEFAULT 24"},
+		{"resource_proxy_prefix", "TEXT NOT NULL DEFAULT ''"},
 		{"subscription_sync", "TEXT NOT NULL DEFAULT ''"},
 		{"source_url", "TEXT NOT NULL DEFAULT ''"},
 		{"update_minutes", "INTEGER NOT NULL DEFAULT 0"},
@@ -180,8 +182,8 @@ func (s *Store) Get(id string) (*Profile, error) {
 	p := new(Profile)
 	var stamp string
 	var next, last int64
-	err := s.db.QueryRow("SELECT kind,id,name,slug,enabled,revision,original,draft,published,published_at,client_update_hours,source_url,update_minutes,update_at,next_update,last_update,update_error,subscription_sync FROM profiles WHERE id=?", id).
-		Scan(&p.Kind, &p.ID, &p.Name, &p.Slug, &p.Enabled, &p.Revision, &p.Original, &p.Draft, &p.Published, &stamp, &p.ClientUpdateHours, &p.SourceURL, &p.UpdateMinutes, &p.UpdateAt, &next, &last, &p.UpdateError, &p.Sync)
+	err := s.db.QueryRow("SELECT kind,id,name,slug,enabled,revision,original,draft,published,published_at,client_update_hours,resource_proxy_prefix,source_url,update_minutes,update_at,next_update,last_update,update_error,subscription_sync FROM profiles WHERE id=?", id).
+		Scan(&p.Kind, &p.ID, &p.Name, &p.Slug, &p.Enabled, &p.Revision, &p.Original, &p.Draft, &p.Published, &stamp, &p.ClientUpdateHours, &p.ResourceProxyPrefix, &p.SourceURL, &p.UpdateMinutes, &p.UpdateAt, &next, &last, &p.UpdateError, &p.Sync)
 	if err != nil {
 		return nil, err
 	}
@@ -206,13 +208,13 @@ func (s *Store) Save(p *Profile) error {
 		p.Kind = "source"
 	}
 	// history 列保留以兼容旧数据库，新数据不再保存历史版本。
-	_, err := s.db.Exec(`INSERT INTO profiles (id,name,slug,enabled,revision,original,draft,published,published_at,history,kind,source_url,update_minutes,update_at,next_update,last_update,update_error,subscription_sync,client_update_hours)
- VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET
+	_, err := s.db.Exec(`INSERT INTO profiles (id,name,slug,enabled,revision,original,draft,published,published_at,history,kind,source_url,update_minutes,update_at,next_update,last_update,update_error,subscription_sync,client_update_hours,resource_proxy_prefix)
+ VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET
  name=excluded.name,slug=excluded.slug,enabled=excluded.enabled,original=excluded.original,
  source_url=excluded.source_url,update_minutes=excluded.update_minutes,update_at=excluded.update_at,next_update=excluded.next_update,last_update=excluded.last_update,update_error=excluded.update_error,
  revision=excluded.revision,draft=excluded.draft,published=excluded.published,
- published_at=excluded.published_at,history=excluded.history,subscription_sync=excluded.subscription_sync,client_update_hours=excluded.client_update_hours`,
-		p.ID, p.Name, p.Slug, p.Enabled, p.Revision, p.Original, p.Draft, p.Published, p.PublishedAt.Format(time.RFC3339Nano), "[]", p.Kind, p.SourceURL, p.UpdateMinutes, p.UpdateAt, p.NextUpdate.Unix(), p.LastUpdate.Unix(), p.UpdateError, p.Sync, p.ClientUpdateHours)
+ published_at=excluded.published_at,history=excluded.history,subscription_sync=excluded.subscription_sync,client_update_hours=excluded.client_update_hours,resource_proxy_prefix=excluded.resource_proxy_prefix`,
+		p.ID, p.Name, p.Slug, p.Enabled, p.Revision, p.Original, p.Draft, p.Published, p.PublishedAt.Format(time.RFC3339Nano), "[]", p.Kind, p.SourceURL, p.UpdateMinutes, p.UpdateAt, p.NextUpdate.Unix(), p.LastUpdate.Unix(), p.UpdateError, p.Sync, p.ClientUpdateHours, p.ResourceProxyPrefix)
 	return err
 }
 
