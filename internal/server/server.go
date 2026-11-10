@@ -19,11 +19,13 @@ const maxBody = 8 << 20
 const sessionCookie = "clash_session"
 
 type Server struct {
-	Store    *store.Store
-	root     string
-	coreMu   sync.Mutex
-	password string
-	core     string
+	Store      *store.Store
+	root       string
+	coreMu     sync.Mutex
+	password   string
+	passwordMu sync.RWMutex
+	ConfigPath string
+	core       string
 }
 
 func New(db *store.Store, password, core, root string) *Server {
@@ -41,6 +43,8 @@ func randomToken(n int) string {
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/login", s.login)
+	mux.HandleFunc("POST /api/password", s.auth(s.changePassword))
+	mux.HandleFunc("GET /api/backup", s.auth(s.backup))
 	mux.HandleFunc("GET /api/session", s.session)
 	mux.HandleFunc("POST /api/logout", s.auth(s.logout))
 	mux.HandleFunc("GET /api/subscription-qr", s.auth(func(w http.ResponseWriter, r *http.Request) {

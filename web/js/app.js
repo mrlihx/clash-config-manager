@@ -95,7 +95,7 @@ function closeSidebar(force) {
 function render() {
   nav();
   $('#headerControls').innerHTML = button('', 'toggle-dark', {symbol:document.documentElement.classList.contains('dark') ? 'sun':'moon', variant:'ghost',title:'切换明暗模式'}) +
-    button('退出','logout',{variant:'ghost'});
+    button('修改密码','change-password',{variant:'ghost'}) + button('导出备份','backup',{variant:'ghost'}) + button('退出','logout',{variant:'ghost'});
   let actions = '';
   if (active === 'profiles') actions = button('导入 / 新建','create',{variant:'primary',symbol:'plus'});
   else if (active === 'proxies') actions = button(`生成订阅地址${selectedNodes.size ? '（'+selectedNodes.size+'）' : ''}`, 'create-subscription',{variant:'primary',symbol:'link'});
@@ -401,6 +401,12 @@ const actions = {
   sidebar:()=>closeSidebar(),
   'close-modal':()=>$('#modal').close(),
   'toggle-dark':()=>{toggleDark();if (!$('#app').hidden) renderAll();},
+  'change-password':()=>modal('修改管理员密码',field('当前密码','currentPassword','','password','required autocomplete="current-password"')+field('新密码','newPassword','','password','required autocomplete="new-password"')+field('确认新密码','confirmPassword','','password','required autocomplete="new-password"'),async form=>{
+    if(form.get('newPassword')!==form.get('confirmPassword')) throw new Error('两次新密码不一致');
+    await api('/api/password',{currentPassword:form.get('currentPassword'),newPassword:form.get('newPassword')});
+    showLogin();toast('密码已修改，请重新登录');
+  },{confirm:'保存密码'}),
+  backup:()=>{window.location.assign('/api/backup');},
   logout:async()=>{await api('/api/logout',{});showLogin();},
   create:()=>create(),
   'edit-source':sourceEditor,

@@ -20,6 +20,7 @@ jobs:
           node-version: '22'
       - run: go test ./...
       - run: go vet ./...
+      - run: bash -n deploy/install.sh
       - name: Check JavaScript syntax
         run: for file in web/js/*.js web/js/build/*.js; do node --check "$file"; done
       - run: go build -trimpath -o bin/clash-config-manager ./cmd/app

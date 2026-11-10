@@ -1,0 +1,19 @@
+services:
+  manager:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8787:8787"
+    volumes:
+      - ./config.production.yaml:/app/config.yaml
+      - manager-data:/app/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8787/api/session"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
+    stop_grace_period: 20s
+
+volumes:
+  manager-data:

@@ -83,6 +83,10 @@ func main() {
 		}
 	}
 	app := server.New(db, password, core, root)
+	app.ConfigPath, err = filepath.Abs(*configPath)
+	if err != nil {
+		log.Fatal(err)
+	}
 	if err := app.UpgradeSubscriptions(); err != nil {
 		log.Fatal("升级默认策略组失败：", err)
 	}

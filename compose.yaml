@@ -5,7 +5,7 @@ services:
     expose:
       - "8787"
     volumes:
-      - ./config.production.yaml:/app/config.yaml:ro
+      - ./config.production.yaml:/app/config.yaml
       - manager-data:/app/data
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8787/api/session"]

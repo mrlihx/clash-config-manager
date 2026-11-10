@@ -75,6 +75,16 @@ go run ./cmd/app
 
 规则命中只代表选择了对应出口，不能保证目标服务的账号地区、出口 IP 或设备网络一定可用。
 
+## 一键部署
+
+在服务器执行，无需提前下载源码：
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/mrlihx/clash-config-manager/main/deploy/install.sh | sudo bash -s -- --remote
+```
+
+默认安装到 `/opt/clash-config-manager`，自动从 GitHub 拉取源码，Linux 上安装缺少的 Git 和 Docker，构建后通过 `http://服务器IP:8787` 访问。默认密码 `admin123`，后台右上角可修改密码、导出数据库备份。重复部署保留已有密码和数据。首次构建需要联网下载依赖，服务器需开放 8787 端口。
+
 ## 构建和部署
 
 ```sh

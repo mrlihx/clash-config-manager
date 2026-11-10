@@ -2,6 +2,20 @@
 
 推荐 Docker Compose：一次构建包含管理程序、前端和 Mihomo。Caddy 对外提供 HTTPS，SQLite、登录会话和规则方案放在持久卷中。应用所有运行设置仍来自根目录 YAML，没有环境变量配置。
 
+## 一键部署
+
+在服务器执行，无需提前下载源码：
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/mrlihx/clash-config-manager/main/deploy/install.sh | sudo bash -s -- --remote
+```
+
+脚本安装到 `/opt/clash-config-manager`，自动拉取 GitHub 的 main 分支；缺少 Git 时通过系统包管理器安装，缺少 Docker 时调用官方安装脚本，然后构建并启动服务。默认访问 `http://服务器IP:8787`，密码为 `admin123`，可在后台右上角修改；修改后需要重新登录。服务器需开放 8787 端口。重复执行保留已有配置和数据。
+
+日后更新使用同一命令，使用 Git 快进更新，不覆盖本地代码改动；如存在冲突，部署会停止并显示 Git 错误。配置文件和数据库保留。此方式使用 `compose.quick.yaml`，无需配置域名；需要 HTTPS 时使用下面的 Caddy 部署方式，两种方式选择一种启动即可。
+
+后台“导出备份”生成当前 SQLite 的一致性副本，不需要停止服务。备份包含节点凭据和登录会话，请妥善保管；启动配置文件需单独保留。
+
 ## Docker Compose
 
 适用于 Linux amd64 / arm64 服务器，需要已安装 Docker Engine 和 Compose 插件。将项目源码上传服务器，不要上传本机的 `config.yaml` 或包含凭据的数据库到公开仓库。
@@ -12,10 +26,10 @@
    cp config.example.yaml config.production.yaml
    nano config.production.yaml
    sudo chgrp 10001 config.production.yaml
-   chmod 640 config.production.yaml
+   chmod 660 config.production.yaml
    ```
 
-   容器以 UID/GID 10001 运行。配置文件以组只读方式提供给容器；数据库和规则缓存使用命名卷，不需要手工处理目录权限。
+   容器以 UID/GID 10001 运行。配置文件允许容器组读写，用于保存后台修改的密码；数据库和规则缓存使用命名卷，不需要手工处理目录权限。
 
 2. 将域名解析到服务器，在 `deploy/Caddyfile` 把 `clash.example.com` 换为实际域名。服务器允许访问 80/443 端口。已有 Nginx/Caddy 占用端口时，移除 compose 中的 caddy 服务，将现有反向代理指向 manager 服务或将管理端口仅映射到 `127.0.0.1:8787`。
 
