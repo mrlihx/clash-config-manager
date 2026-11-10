@@ -188,7 +188,7 @@ func (s *Server) bundleSubscription(ctx context.Context, source string, nodesOnl
 	stale := false
 	inline := config.InlineResources
 	if nodesOnly {
-		inline = config.InlineNodeProviders
+		inline = config.InlineSubscriptionResources
 	}
 	out, err := inline(source, func(resource config.Resource) ([]byte, error) {
 		data, err := s.loadResource(ctx, resource)

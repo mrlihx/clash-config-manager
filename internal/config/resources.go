@@ -60,14 +60,19 @@ func resourcesFromRoot(root *yaml.Node) ([]Resource, error) {
 
 // 只改输出副本，后台仍保留远程地址和更新间隔。
 func InlineResources(source string, load func(Resource) ([]byte, error)) (string, error) {
-	return inlineResources(source, load, true)
+	return inlineResources(source, load, true, false)
 }
 
 func InlineNodeProviders(source string, load func(Resource) ([]byte, error)) (string, error) {
-	return inlineResources(source, load, false)
+	return inlineResources(source, load, false, false)
 }
 
-func inlineResources(source string, load func(Resource) ([]byte, error), includeRules bool) (string, error) {
+// InlineSubscriptionResources 将服务分流规则和节点写入输出，通用规则集保留外部引用。
+func InlineSubscriptionResources(source string, load func(Resource) ([]byte, error)) (string, error) {
+	return inlineResources(source, load, false, true)
+}
+
+func inlineResources(source string, load func(Resource) ([]byte, error), includeRules, serviceRules bool) (string, error) {
 	doc, err := Parse(source)
 	if err != nil {
 		return "", err
@@ -77,7 +82,7 @@ func inlineResources(source string, load func(Resource) ([]byte, error), include
 		return "", err
 	}
 	root := doc.Content[0]
-	if !includeRules && field(root, "proxy-providers") == nil {
+	if !includeRules && !serviceRules && field(root, "proxy-providers") == nil {
 		return source, nil
 	}
 	for _, rule := range children(field(root, "rules")) {
@@ -91,7 +96,12 @@ func inlineResources(source string, load func(Resource) ([]byte, error), include
 	providerNodes := map[string][]string{}
 	for _, resource := range resources {
 		if !includeRules && resource.Section == "rule-providers" {
-			continue
+			service := serviceRules && slices.ContainsFunc(Categories, func(c RoutingCategory) bool {
+				return !c.Direct && resource.Name == "System_"+c.ID
+			})
+			if !service {
+				continue
+			}
 		}
 		data, err := load(resource)
 		if err != nil {
