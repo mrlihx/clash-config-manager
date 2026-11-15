@@ -1,0 +1,59 @@
+name: Publish executables
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: go test ./...
+      - run: go vet ./...
+      - name: Verify real MRS conversion and inline rules
+        run: |
+          curl -fsSL --retry 3 https://github.com/MetaCubeX/mihomo/releases/download/v1.19.33/mihomo-linux-amd64-compatible-v1.19.33.gz -o "$RUNNER_TEMP/mihomo.gz"
+          gzip -dc "$RUNNER_TEMP/mihomo.gz" > "$RUNNER_TEMP/mihomo"
+          chmod +x "$RUNNER_TEMP/mihomo"
+          go test ./internal/server -run TestMRSResourceConversion -mihomo-test "$RUNNER_TEMP/mihomo"
+      - name: Check JavaScript
+        run: for file in web/js/*.js web/js/build/*.js; do node --check "$file"; done
+      - name: Build release executables
+        run: |
+          mkdir -p dist
+          for arch in amd64 arm64; do
+            CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build -trimpath \
+              -ldflags="-s -w -X main.version=$GITHUB_SHA" \
+              -o "dist/clash-config-manager_linux_$arch" ./cmd/app
+          done
+          cd dist
+          sha256sum clash-config-manager_linux_* > SHA256SUMS
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="build-${GITHUB_SHA:0:12}"
+          if gh release view "$tag" > /dev/null 2>&1; then
+            gh release upload "$tag" dist/* --clobber
+            gh release edit "$tag" --latest
+          else
+            gh release create "$tag" dist/* \
+              --target "$GITHUB_SHA" --title "Build ${GITHUB_SHA:0:12}" \
+              --notes 'Linux amd64 / arm64 可执行程序及 SHA-256 校验文件。支持网站底部在线更新。' --latest
+          fi

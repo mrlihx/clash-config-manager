@@ -1,0 +1,18 @@
+[Unit]
+Description=Clash Configuration Manager
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=clash-manager
+Group=clash-manager
+WorkingDirectory=/opt/clash-config-manager
+ExecStart=/opt/clash-config-manager/bin/clash-config-manager -config /opt/clash-config-manager/config.yaml
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=20
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

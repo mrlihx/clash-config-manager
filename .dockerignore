@@ -1,0 +1,14 @@
+.git
+node_modules
+bin
+data
+rules
+*.db
+*.db-*
+config.yaml
+config.production.yaml
+.codex
+
+.idea
+.DS_Store
+backup
